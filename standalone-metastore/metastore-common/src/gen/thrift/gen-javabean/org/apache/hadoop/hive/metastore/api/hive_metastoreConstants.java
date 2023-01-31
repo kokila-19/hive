@@ -89,4 +89,8 @@ package org.apache.hadoop.hive.metastore.api;
 
   public static final java.lang.String WRITE_ID = "writeId";
 
+  public static final java.lang.String EXPECTED_PARAMETER_KEY = "expected_parameter_key";
+
+  public static final java.lang.String EXPECTED_PARAMETER_VALUE = "expected_parameter_value";
+
 }

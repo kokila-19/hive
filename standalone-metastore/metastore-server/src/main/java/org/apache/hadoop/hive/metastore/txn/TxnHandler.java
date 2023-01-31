@@ -1012,6 +1012,7 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
   @RetrySemantics.Idempotent
   public void abortTxn(AbortTxnRequest rqst) throws NoSuchTxnException, MetaException, TxnAbortedException {
     long txnid = rqst.getTxnid();
+    TxnErrorMsg txnErrorMsg = TxnErrorMsg.NONE;
     long sourceTxnId = -1;
     boolean isReplayedReplTxn = TxnType.REPL_CREATED.equals(rqst.getTxn_type());
     boolean isHiveReplTxn = rqst.isSetReplPolicy() && TxnType.DEFAULT.equals(rqst.getTxn_type());
@@ -1053,7 +1054,16 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
           }
           raiseTxnUnexpectedState(status, txnid);
         }
-        abortTxns(dbConn, Collections.singletonList(txnid), true, isReplayedReplTxn);
+
+        if (isReplayedReplTxn) {
+          txnErrorMsg = TxnErrorMsg.ABORT_REPLAYED_REPL_TXN;
+        } else if (isHiveReplTxn) {
+          txnErrorMsg = TxnErrorMsg.ABORT_DEFAULT_REPL_TXN;
+        } else if (rqst.isSetErrorCode()) {
+          txnErrorMsg = TxnErrorMsg.getTxnErrorMsg(rqst.getErrorCode());
+        }
+
+        abortTxns(dbConn, Collections.singletonList(txnid), true, isReplayedReplTxn, txnErrorMsg);
 
         if (isReplayedReplTxn) {
           deleteReplTxnMapEntry(dbConn, sourceTxnId, rqst.getReplPolicy());
@@ -1087,6 +1097,10 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
   @RetrySemantics.Idempotent
   public void abortTxns(AbortTxnsRequest rqst) throws MetaException {
     List<Long> txnIds = rqst.getTxn_ids();
+    TxnErrorMsg txnErrorMsg = TxnErrorMsg.NONE;
+    if (rqst.isSetErrorCode()) {
+      txnErrorMsg = TxnErrorMsg.getTxnErrorMsg(rqst.getErrorCode());
+    }
     try {
       Connection dbConn = null;
       Statement stmt = null;
@@ -1113,7 +1127,7 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
             }
           }
         }
-        int numAborted = abortTxns(dbConn, txnIds, false, false);
+        int numAborted = abortTxns(dbConn, txnIds, false, false, txnErrorMsg);
         if (numAborted != txnIds.size()) {
           LOG.warn(
               "Abort Transactions command only aborted {} out of {} transactions. It's possible that the other"
@@ -1514,7 +1528,8 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
                   dbConn.rollback(undoWriteSetForCurrentTxn);
                   LOG.info(msg);
                   //todo: should make abortTxns() write something into TXNS.TXN_META_INFO about this
-                  if (abortTxns(dbConn, Collections.singletonList(txnid), false, isReplayedReplTxn) != 1) {
+                  if (abortTxns(dbConn, Collections.singletonList(txnid), false, isReplayedReplTxn,
+                          TxnErrorMsg.ABORT_WRITE_CONFLICT) != 1) {
                     throw new IllegalStateException(msg + " FAILED!");
                   }
                   dbConn.commit();
@@ -1878,7 +1893,7 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
           }
 
           // Abort all the allocated txns so that the mapped write ids are referred as aborted ones.
-          int numAborts = abortTxns(dbConn, txnIds, false, false);
+          int numAborts = abortTxns(dbConn, txnIds, false, false, TxnErrorMsg.ABORT_REPL_WRITEID_TXN);
           assert(numAborts == numAbortedWrites);
         }
 
@@ -3733,6 +3748,9 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
             String partName = rqst.getPartitionname();
             if (partName != null) buf.append("\"CQ_PARTITION\", ");
             buf.append("\"CQ_STATE\", \"CQ_TYPE\", \"CQ_ENQUEUE_TIME\", \"CQ_POOL_NAME\"");
+            if (rqst.isSetNumberOfBuckets()) {
+              buf.append(", \"CQ_NUMBER_OF_BUCKETS\"");
+            }
             if (rqst.getProperties() != null) {
               buf.append(", \"CQ_TBLPROPERTIES\"");
             }
@@ -3765,6 +3783,9 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
             buf.append(getEpochFn(dbProduct));
             buf.append(", ?");
             params.add(rqst.getPoolName());
+            if (rqst.isSetNumberOfBuckets()) {
+              buf.append(", ").append(rqst.getNumberOfBuckets());
+            }
             if (rqst.getProperties() != null) {
               buf.append(", ?");
               params.add(new StringableMap(rqst.getProperties()).toString());
@@ -3885,14 +3906,19 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
   public ShowCompactResponse showCompact(ShowCompactRequest rqst) throws MetaException {
     try {
       ShowCompactResponse response = new ShowCompactResponse(new ArrayList<>());
-      String query = TxnQueries.SHOW_COMPACTION_QUERY + getShowCompactFilterClause(rqst) + 
-        TxnQueries.SHOW_COMPACTION_ORDERBY_CLAUSE;
+      String query = TxnQueries.SHOW_COMPACTION_QUERY +
+        getShowCompactFilterClause(rqst) +
+        getShowCompactSortingOrderClause(rqst);
       List<String> params = getShowCompactParamList(rqst);
 
       try (Connection dbConn = getDbConn(Connection.TRANSACTION_READ_COMMITTED);
         PreparedStatement stmt = sqlGenerator.prepareStmtWithParameters(dbConn, query, params)) {
         if (rqst.isSetId()) {
           stmt.setLong(1, rqst.getId());
+        }
+        int rowLimit = (int) rqst.getLimit();
+        if (rowLimit > 0) {
+          stmt.setMaxRows(rowLimit);
         }
         LOG.debug("Going to execute query <" + query + ">");
         try (ResultSet rs = stmt.executeQuery()) {
@@ -3955,14 +3981,19 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
     }
   }
 
+  private String getShowCompactSortingOrderClause(ShowCompactRequest request) {
+    String sortingOrder = request.getOrder();
+    return isNotBlank(sortingOrder) ? "  ORDER BY  " + sortingOrder : TxnQueries.SHOW_COMPACTION_ORDERBY_CLAUSE;
+  }
+
   private List<String> getShowCompactParamList(ShowCompactRequest request) throws MetaException {
     if (request.getId() > 0) {
       return Collections.emptyList();
     }
     String poolName = request.getPoolName();
-    String dbName = request.getDbname();
-    String tableName = request.getTablename();
-    String partName = request.getPartitionname();
+    String dbName = request.getDbName();
+    String tableName = request.getTbName();
+    String partName = request.getPartName();
     CompactionType type = request.getType();
     String state = request.getState();
   
@@ -3994,13 +4025,13 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
     if (request.getId() > 0) {
       params.add("\"CC_ID\"=?");
     } else {
-      if (isNotBlank(request.getDbname())) {
+      if (isNotBlank(request.getDbName())) {
         params.add("\"CC_DATABASE\"=?");
       }
-      if (isNotBlank(request.getTablename())) {
+      if (isNotBlank(request.getTbName())) {
         params.add("\"CC_TABLE\"=?");
       }
-      if (isNotBlank(request.getPartitionname())) {
+      if (isNotBlank(request.getPartName())) {
         params.add("\"CC_PARTITION\"=?");
       }
       if (isNotBlank(request.getState())) {
@@ -5060,8 +5091,8 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
   private static Map<LockType, Map<LockType, Map<LockState, LockAction>>> jumpTable;
 
   private int abortTxns(Connection dbConn, List<Long> txnids,
-                        boolean skipCount, boolean isReplReplayed) throws SQLException, MetaException {
-    return abortTxns(dbConn, txnids, false, skipCount, isReplReplayed);
+                        boolean skipCount, boolean isReplReplayed, TxnErrorMsg txnErrorMsg) throws SQLException, MetaException {
+    return abortTxns(dbConn, txnids, false, skipCount, isReplReplayed, txnErrorMsg);
   }
   /**
    * TODO: expose this as an operation to client.  Useful for streaming API to abort all remaining
@@ -5078,12 +5109,14 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
    * @throws SQLException
    */
   private int abortTxns(Connection dbConn, List<Long> txnids, boolean checkHeartbeat,
-                        boolean skipCount, boolean isReplReplayed)
+                        boolean skipCount, boolean isReplReplayed, TxnErrorMsg txnErrorMsg)
       throws SQLException, MetaException {
     Statement stmt = null;
     if (txnids.isEmpty()) {
       return 0;
     }
+    Collections.sort(txnids);
+    LOG.debug("Aborting {} transaction(s) {} due to {}", txnids.size(), txnids, txnErrorMsg);
     removeTxnsFromMinHistoryLevel(dbConn, txnids);
     try {
       stmt = dbConn.createStatement();
@@ -5095,6 +5128,7 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
 
       // add update txns queries to query list
       prefix.append("UPDATE \"TXNS\" SET \"TXN_STATE\" = ").append(TxnStatus.ABORTED)
+              .append(" , \"TXN_META_INFO\" = ").append(txnErrorMsg.toSqlString())
               .append(" WHERE \"TXN_STATE\" = ").append(TxnStatus.OPEN).append(" AND ");
       if (checkHeartbeat) {
         suffix.append(" AND \"TXN_LAST_HEARTBEAT\" < ")
@@ -5134,6 +5168,7 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
       if (MetastoreConf.getBoolVar(conf, MetastoreConf.ConfVars.METASTORE_ACIDMETRICS_EXT_ON)) {
         Metrics.getOrCreateCounter(MetricsConstants.TOTAL_NUM_ABORTED_TXNS).inc(txnids.size());
       }
+      LOG.warn("Aborted {} transaction(s) {} due to {}", txnids.size(), txnids, txnErrorMsg);
       return numAborted;
     } finally {
       closeStmt(stmt);
@@ -5237,7 +5272,8 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
             " since a concurrent committed transaction [" + JavaUtils.txnIdToString(rs.getLong(4)) + "," + rs.getLong(5) +
             "] has already updated resource '" + resourceName + "'";
           LOG.info(msg);
-          if (abortTxns(dbConn, Collections.singletonList(writeSet.get(0).txnId), false, false) != 1) {
+          if (abortTxns(dbConn, Collections.singletonList(writeSet.get(0).txnId), false, false,
+                  TxnErrorMsg.ABORT_CONCURRENT) != 1) {
             throw new IllegalStateException(msg + " FAILED!");
           }
           dbConn.commit();
@@ -5755,12 +5791,10 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
         close(rs, stmt, null);
         int numTxnsAborted = 0;
         for(List<Long> batchToAbort : timedOutTxns) {
-          if (abortTxns(dbConn, batchToAbort, true, false, false) == batchToAbort.size()) {
+          if (abortTxns(dbConn, batchToAbort, true, false, false, TxnErrorMsg.ABORT_TIMEOUT) == batchToAbort.size()) {
             dbConn.commit();
             numTxnsAborted += batchToAbort.size();
             //todo: add TXNS.COMMENT filed and set it to 'aborted by system due to timeout'
-            Collections.sort(batchToAbort);//easier to read logs
-            LOG.info("Aborted the following transactions due to timeout: {}", batchToAbort.toString());
           }
           else {
             //could not abort all txns in this batch - this may happen because in parallel with this
@@ -5771,7 +5805,7 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
             dbConn.rollback();
           }
         }
-        LOG.info("Aborted {} transactions due to timeout", numTxnsAborted);
+        LOG.info("Aborted {} transaction(s) due to timeout", numTxnsAborted);
         if (MetastoreConf.getBoolVar(conf, MetastoreConf.ConfVars.METASTORE_ACIDMETRICS_EXT_ON)) {
           Metrics.getOrCreateCounter(MetricsConstants.TOTAL_NUM_TIMED_OUT_TXNS).inc(numTxnsAborted);
         }
@@ -6188,6 +6222,12 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
         connectionProps.setProperty("user", username);
         connectionProps.setProperty("password", password);
         Connection conn = driver.connect(connString, connectionProps);
+        String prepareStmt = dbProduct != null ? dbProduct.getPrepareTxnStmt() : null;
+        if (prepareStmt != null) {
+          try (Statement stmt = conn.createStatement()) {
+            stmt.execute(prepareStmt);
+          }
+        }
         conn.setAutoCommit(false);
         return conn;
       } catch (SQLException e) {

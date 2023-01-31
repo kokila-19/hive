@@ -31,7 +31,7 @@ import org.apache.hadoop.hive.conf.Constants;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.SourceTable;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.ddl.DDLDesc;
 import org.apache.hadoop.hive.ql.ddl.DDLUtils;
 import org.apache.hadoop.hive.ql.exec.Utilities;
@@ -44,6 +44,8 @@ import org.apache.hadoop.hive.ql.plan.FileSinkDesc;
 import org.apache.hadoop.hive.ql.plan.PlanUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.hadoop.hive.ql.ddl.DDLUtils.setColumnsAndStorePartitionTransformSpecOfTable;
 
 /**
  * DDL task description for CREATE VIEW commands.
@@ -237,9 +239,15 @@ public class CreateMaterializedViewDesc implements DDLDesc, Serializable {
     this.tblProps = tblProps;
   }
 
-  @Explain(displayName = "table properties")
   public Map<String, String> getTblProps() {
     return tblProps;
+  }
+
+  @Explain(displayName = "table properties")
+  public Map<String, String> getTblPropsExplain() { // only for displaying plan
+    return PlanUtils.getPropertiesForExplain(tblProps,
+            hive_metastoreConstants.TABLE_IS_CTAS,
+            hive_metastoreConstants.TABLE_BUCKETING_VERSION);
   }
 
   @Explain(displayName = "if not exists", displayOnlyOnTrue = true)
@@ -306,17 +314,13 @@ public class CreateMaterializedViewDesc implements DDLDesc, Serializable {
     tbl.setTableType(TableType.MATERIALIZED_VIEW);
     tbl.setSerializationLib(null);
     tbl.clearSerDeInfo();
-    tbl.setFields(getSchema());
+
     if (getComment() != null) {
       tbl.setProperty("comment", getComment());
     }
 
     if (tblProps != null) {
       tbl.getParameters().putAll(tblProps);
-    }
-
-    if (!CollectionUtils.isEmpty(partCols)) {
-      tbl.setPartCols(partCols);
     }
 
     if (!CollectionUtils.isEmpty(sortColNames)) {
@@ -346,6 +350,8 @@ public class CreateMaterializedViewDesc implements DDLDesc, Serializable {
           getStorageHandler());
     }
     HiveStorageHandler storageHandler = tbl.getStorageHandler();
+
+    setColumnsAndStorePartitionTransformSpecOfTable(getSchema(), getPartCols(), conf, tbl);
 
     /*
      * If the user didn't specify a SerDe, we use the default.

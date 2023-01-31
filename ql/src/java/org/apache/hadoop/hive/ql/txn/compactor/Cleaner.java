@@ -95,7 +95,6 @@ public class Cleaner extends MetaStoreCompactorThread {
 
   static final private String CLASS_NAME = Cleaner.class.getName();
   static final private Logger LOG = LoggerFactory.getLogger(CLASS_NAME);
-  private long cleanerCheckInterval = 0;
   private boolean metricsEnabled = false;
 
   private ReplChangeManager replChangeManager;
@@ -105,7 +104,7 @@ public class Cleaner extends MetaStoreCompactorThread {
   public void init(AtomicBoolean stop) throws Exception {
     super.init(stop);
     replChangeManager = ReplChangeManager.getInstance(conf);
-    cleanerCheckInterval = conf.getTimeVar(
+    checkInterval = conf.getTimeVar(
             HiveConf.ConfVars.HIVE_COMPACTOR_CLEANER_RUN_INTERVAL, TimeUnit.MILLISECONDS);
     cleanerExecutor = CompactorUtil.createExecutorWithThreadFactory(
             conf.getIntVar(HiveConf.ConfVars.HIVE_COMPACTOR_CLEANER_THREADS_NUM),
@@ -140,7 +139,12 @@ public class Cleaner extends MetaStoreCompactorThread {
 
           long minOpenTxnId = txnHandler.findMinOpenTxnIdForCleaner();
 
+          checkInterrupt();
+
           List<CompactionInfo> readyToClean = txnHandler.findReadyToClean(minOpenTxnId, retentionTime);
+
+          checkInterrupt();
+
           if (!readyToClean.isEmpty()) {
             long minTxnIdSeenOpen = txnHandler.findMinTxnIdSeenOpen();
             final long cleanerWaterMark =
@@ -155,6 +159,10 @@ public class Cleaner extends MetaStoreCompactorThread {
             // when min_history_level is finally dropped, than every HMS will commit compaction the new way
             // and minTxnIdSeenOpen can be removed and minOpenTxnId can be used instead.
             for (CompactionInfo compactionInfo : readyToClean) {
+
+              //Check for interruption before scheduling each compactionInfo and return if necessary
+              checkInterrupt();
+
               CompletableFuture<Void> asyncJob =
                   CompletableFuture.runAsync(
                           ThrowingRunnable.unchecked(() -> clean(compactionInfo, cleanerWaterMark, metricsEnabled)),
@@ -165,8 +173,13 @@ public class Cleaner extends MetaStoreCompactorThread {
                       });
               cleanerList.add(asyncJob);
             }
-            CompletableFuture.allOf(cleanerList.toArray(new CompletableFuture[0])).join();
+
+            //Use get instead of join, so we can receive InterruptedException and shutdown gracefully
+            CompletableFuture.allOf(cleanerList.toArray(new CompletableFuture[0])).get();
           }
+        } catch (InterruptedException e) {
+          // do not ignore interruption requests
+          return;
         } catch (Throwable t) {
           LOG.error("Caught an exception in the main loop of compactor cleaner, " +
               StringUtils.stringifyException(t));
@@ -180,18 +193,17 @@ public class Cleaner extends MetaStoreCompactorThread {
           stopCycleUpdater();
         }
         // Now, go back to bed until it's time to do this again
-        long elapsedTime = System.currentTimeMillis() - startedAt;
-        if (elapsedTime < cleanerCheckInterval && !stop.get()) {
-          Thread.sleep(cleanerCheckInterval - elapsedTime);
-        }
-        LOG.debug("Cleaner thread finished one loop.");
+        doPostLoopActions(System.currentTimeMillis() - startedAt);
       } while (!stop.get());
     } catch (InterruptedException ie) {
       LOG.error("Compactor cleaner thread interrupted, exiting " +
         StringUtils.stringifyException(ie));
     } finally {
+      if (Thread.currentThread().isInterrupted()) {
+        LOG.info("Interrupt received, Cleaner is shutting down.");
+      }
       if (cleanerExecutor != null) {
-        this.cleanerExecutor.shutdownNow();
+        cleanerExecutor.shutdownNow();
       }
     }
   }
@@ -346,7 +358,7 @@ public class Cleaner extends MetaStoreCompactorThread {
   }
 
   private boolean removeFiles(String location, long minOpenTxnGLB, CompactionInfo ci, boolean dropPartition)
-      throws MetaException, IOException, NoSuchObjectException, NoSuchTxnException {
+      throws MetaException, IOException, NoSuchTxnException {
 
     if (dropPartition) {
       LockRequest lockRequest = createLockRequest(ci, 0, LockType.EXCL_WRITE, DataOperationType.DELETE);
@@ -418,11 +430,11 @@ public class Cleaner extends MetaStoreCompactorThread {
    * @return true if any files were removed
    */
   private boolean removeFiles(String location, ValidWriteIdList writeIdList, CompactionInfo ci)
-      throws IOException, NoSuchObjectException, MetaException {
+      throws IOException, MetaException {
     Path path = new Path(location);
     FileSystem fs = path.getFileSystem(conf);
     
-    // Collect all of the files/dirs
+    // Collect all the files/dirs
     Map<Path, AcidUtils.HdfsDirSnapshot> dirSnapshots = AcidUtils.getHdfsDirSnapshotsForCleaner(fs, path);
     AcidDirectory dir = AcidUtils.getAcidState(fs, path, conf, writeIdList, Ref.from(false), false, 
         dirSnapshots);
@@ -474,8 +486,7 @@ public class Cleaner extends MetaStoreCompactorThread {
     return obsoleteDirs;
   }
 
-  private boolean removeFiles(String location, CompactionInfo ci)
-      throws NoSuchObjectException, IOException, MetaException {
+  private boolean removeFiles(String location, CompactionInfo ci) throws IOException, MetaException {
     String strIfPurge = ci.getProperty("ifPurge");
     boolean ifPurge = strIfPurge != null || Boolean.parseBoolean(ci.getProperty("ifPurge"));
     

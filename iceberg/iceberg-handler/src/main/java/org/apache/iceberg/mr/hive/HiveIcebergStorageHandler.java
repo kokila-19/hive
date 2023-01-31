@@ -41,7 +41,6 @@ import org.apache.hadoop.hive.common.StatsSetupConst;
 import org.apache.hadoop.hive.common.type.Date;
 import org.apache.hadoop.hive.common.type.SnapshotContext;
 import org.apache.hadoop.hive.common.type.Timestamp;
-import org.apache.hadoop.hive.conf.Constants;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaHook;
 import org.apache.hadoop.hive.metastore.api.EnvironmentContext;
@@ -51,6 +50,7 @@ import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.Context.Operation;
 import org.apache.hadoop.hive.ql.ddl.table.AbstractAlterTableDesc;
 import org.apache.hadoop.hive.ql.ddl.table.AlterTableType;
+import org.apache.hadoop.hive.ql.ddl.table.create.like.CreateTableLikeDesc;
 import org.apache.hadoop.hive.ql.ddl.table.misc.properties.AlterTableSetPropertiesDesc;
 import org.apache.hadoop.hive.ql.exec.UDFArgumentException;
 import org.apache.hadoop.hive.ql.exec.Utilities;
@@ -63,6 +63,7 @@ import org.apache.hadoop.hive.ql.metadata.HiveStorageHandler;
 import org.apache.hadoop.hive.ql.metadata.HiveStoragePredicateHandler;
 import org.apache.hadoop.hive.ql.metadata.VirtualColumn;
 import org.apache.hadoop.hive.ql.parse.AlterTableExecuteSpec;
+import org.apache.hadoop.hive.ql.parse.PartitionTransform;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.hadoop.hive.ql.parse.TransformSpec;
 import org.apache.hadoop.hive.ql.plan.DynamicPartitionCtx;
@@ -263,7 +264,7 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
   }
 
   @Override
-  public boolean directInsertCTAS() {
+  public boolean directInsert() {
     return true;
   }
 
@@ -462,7 +463,11 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
   @Override
   public void storageHandlerCommit(Properties commitProperties, boolean overwrite) throws HiveException {
     String tableName = commitProperties.getProperty(Catalogs.NAME);
+    String location = commitProperties.getProperty(Catalogs.LOCATION);
     Configuration configuration = SessionState.getSessionConf();
+    if (location != null) {
+      HiveTableUtil.cleanupTableObjectFile(location, configuration);
+    }
     List<JobContext> jobContextList = generateJobContext(configuration, tableName, overwrite);
     if (jobContextList.isEmpty()) {
       return;
@@ -530,6 +535,13 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
             (AlterTableExecuteSpec.ExpireSnapshotsSpec) executeSpec.getOperationParams();
         icebergTable.expireSnapshots().expireOlderThan(expireSnapshotsSpec.getTimestampMillis()).commit();
         break;
+      case SET_CURRENT_SNAPSHOT:
+        AlterTableExecuteSpec.SetCurrentSnapshotSpec setSnapshotVersionSpec =
+            (AlterTableExecuteSpec.SetCurrentSnapshotSpec) executeSpec.getOperationParams();
+        LOG.debug("Executing set current snapshot operation on iceberg table {}.{} to version {}", hmsTable.getDbName(),
+            hmsTable.getTableName(), setSnapshotVersionSpec.getSnapshotId());
+        IcebergTableUtil.setCurrentSnapshot(icebergTable, setSnapshotVersionSpec.getSnapshotId());
+        break;
       default:
         throw new UnsupportedOperationException(
             String.format("Operation type %s is not supported", executeSpec.getOperationType().name()));
@@ -579,6 +591,11 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
     HiveStorageHandler.super.validateSinkDesc(sinkDesc);
     if (sinkDesc.getInsertOverwrite()) {
       Table table = IcebergTableUtil.getTable(conf, sinkDesc.getTableInfo().getProperties());
+      if (table.currentSnapshot() != null &&
+          Long.parseLong(table.currentSnapshot().summary().get(SnapshotSummary.TOTAL_RECORDS_PROP)) == 0) {
+        // If the table is empty we don't have any danger that some data can get lost.
+        return;
+      }
       if (IcebergTableUtil.isBucketed(table)) {
         throw new SemanticException("Cannot perform insert overwrite query on bucket partitioned Iceberg table.");
       }
@@ -587,7 +604,7 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
             .anyMatch(id -> id < table.spec().specId())) {
           throw new SemanticException(
               "Cannot perform insert overwrite query on Iceberg table where partition evolution happened. In order " +
-              "to succesfully carry out any insert overwrite operation on this table, the data has to be rewritten " +
+              "to successfully carry out any insert overwrite operation on this table, the data has to be rewritten " +
               "conforming to the latest spec. ");
         }
       }
@@ -595,9 +612,12 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
   }
 
   @Override
-  public AcidSupportType supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table table) {
+  public AcidSupportType supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table table,
+      boolean isWriteOperation) {
     if (table.getParameters() != null && "2".equals(table.getParameters().get(TableProperties.FORMAT_VERSION))) {
-      checkDMLOperationMode(table);
+      if (isWriteOperation) {
+        checkDMLOperationMode(table);
+      }
       return AcidSupportType.WITHOUT_TRANSACTIONS;
     }
 
@@ -726,6 +746,11 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
    */
   public static Table table(Configuration config, String name) {
     Table table = SerializationUtil.deserializeFromBase64(config.get(InputFormatConfig.SERIALIZED_TABLE_PREFIX + name));
+    if (table == null &&
+            config.getBoolean(hive_metastoreConstants.TABLE_IS_CTAS, false) &&
+            StringUtils.isNotBlank(config.get(InputFormatConfig.TABLE_LOCATION))) {
+      table = HiveTableUtil.readTableObjectFromFile(config);
+    }
     checkAndSetIoConfig(config, table);
     return table;
   }
@@ -756,7 +781,7 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
    */
   public static void checkAndSkipIoConfigSerialization(Configuration config, Table table) {
     if (table != null && config.getBoolean(InputFormatConfig.CONFIG_SERIALIZATION_DISABLED,
-        InputFormatConfig.CONFIG_SERIALIZATION_DISABLED_DEFAULT) && table.io() instanceof HadoopConfigurable) {
+            InputFormatConfig.CONFIG_SERIALIZATION_DISABLED_DEFAULT) && table.io() instanceof HadoopConfigurable) {
       ((HadoopConfigurable) table.io()).serializeConfWith(conf -> new NonSerializingConfig(config)::get);
     }
   }
@@ -828,15 +853,18 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
       map.put(InputFormatConfig.SERIALIZED_TABLE_PREFIX + tableDesc.getTableName(),
           SerializationUtil.serializeToBase64(serializableTable));
     } catch (NoSuchTableException ex) {
-      if (!(StringUtils.isNotBlank(props.getProperty(hive_metastoreConstants.TABLE_IS_CTAS)) &&
-              StringUtils.isNotBlank(props.getProperty(Constants.EXPLAIN_CTAS_LOCATION)))) {
+      if (!HiveTableUtil.isCtas(props)) {
         throw ex;
       }
 
-      location = map.get(hive_metastoreConstants.META_TABLE_LOCATION);
-      if (StringUtils.isBlank(location)) {
-        location = props.getProperty(Constants.EXPLAIN_CTAS_LOCATION);
+      if (!Catalogs.hiveCatalog(configuration, props)) {
+        throw new UnsupportedOperationException(HiveIcebergSerDe.CTAS_EXCEPTION_MSG);
       }
+
+      location = map.get(hive_metastoreConstants.META_TABLE_LOCATION);
+
+      map.put(InputFormatConfig.SERIALIZED_TABLE_PREFIX + tableDesc.getTableName(),
+              SerializationUtil.serializeToBase64(null));
 
       try {
         AbstractSerDe serDe = tableDesc.getDeserializer(configuration);
@@ -857,6 +885,9 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
     // save schema into table props as well to avoid repeatedly hitting the HMS during serde initializations
     // this is an exception to the interface documentation, but it's a safe operation to add this property
     props.put(InputFormatConfig.TABLE_SCHEMA, schemaJson);
+    if (spec == null) {
+      spec = PartitionSpec.unpartitioned();
+    }
     props.put(InputFormatConfig.PARTITION_SPEC, PartitionSpecParser.toJson(spec));
 
     // We need to remove this otherwise the job.xml will be invalid as column comments are separated with '\0' and
@@ -1078,5 +1109,48 @@ public class HiveIcebergStorageHandler implements HiveStoragePredicateHandler, H
       // signal manual iceberg metadata location updated by user
       environmentContext.putToProperties(HiveIcebergMetaHook.MANUAL_ICEBERG_METADATA_LOCATION_CHANGE, "true");
     }
+  }
+
+  @Override
+  public void setTableParametersForCTLT(org.apache.hadoop.hive.ql.metadata.Table tbl, CreateTableLikeDesc desc,
+      Map<String, String> origParams) {
+    // Preserve the format-version of the iceberg table and filter out rest.
+    String formatVersion = origParams.get(TableProperties.FORMAT_VERSION);
+    if ("2".equals(formatVersion)) {
+      tbl.getParameters().put(TableProperties.FORMAT_VERSION, formatVersion);
+      tbl.getParameters().put(TableProperties.DELETE_MODE, "merge-on-read");
+      tbl.getParameters().put(TableProperties.UPDATE_MODE, "merge-on-read");
+      tbl.getParameters().put(TableProperties.MERGE_MODE, "merge-on-read");
+    }
+
+    // check if the table is being created as managed table, in that case we translate it to external
+    if (!desc.isExternal()) {
+      tbl.getParameters().put("TRANSLATED_TO_EXTERNAL", "TRUE");
+      desc.setIsExternal(true);
+    }
+
+    // If source is Iceberg table set the schema and the partition spec
+    if ("ICEBERG".equalsIgnoreCase(origParams.get("table_type"))) {
+      tbl.getParameters()
+          .put(InputFormatConfig.TABLE_SCHEMA, origParams.get(InputFormatConfig.TABLE_SCHEMA));
+      tbl.getParameters()
+          .put(InputFormatConfig.PARTITION_SPEC, origParams.get(InputFormatConfig.PARTITION_SPEC));
+    } else {
+      // if the source is partitioned non-iceberg table set the partition transform spec and set the table as
+      // unpartitioned
+      List<TransformSpec> spec = PartitionTransform.getPartitionTransformSpec(tbl.getPartitionKeys());
+      SessionStateUtil.addResourceOrThrow(conf, hive_metastoreConstants.PARTITION_TRANSFORM_SPEC, spec);
+      tbl.getSd().getCols().addAll(tbl.getPartitionKeys());
+      tbl.getTTable().setPartitionKeysIsSet(false);
+    }
+  }
+
+  @Override
+  public Map<String, String> getNativeProperties(org.apache.hadoop.hive.ql.metadata.Table table) {
+    Table origTable = IcebergTableUtil.getTable(conf, table.getTTable());
+    Map<String, String> props = Maps.newHashMap();
+    props.put(InputFormatConfig.TABLE_SCHEMA, SchemaParser.toJson(origTable.schema()));
+    props.put(InputFormatConfig.PARTITION_SPEC, PartitionSpecParser.toJson(origTable.spec()));
+    return props;
   }
 }

@@ -155,15 +155,18 @@ class LockType(object):
 class CompactionType(object):
     MINOR = 1
     MAJOR = 2
+    REBALANCE = 3
 
     _VALUES_TO_NAMES = {
         1: "MINOR",
         2: "MAJOR",
+        3: "REBALANCE",
     }
 
     _NAMES_TO_VALUES = {
         "MINOR": 1,
         "MAJOR": 2,
+        "REBALANCE": 3,
     }
 
 
@@ -4882,16 +4885,18 @@ class DoubleColumnStatsData(object):
      - numNulls
      - numDVs
      - bitVectors
+     - histogram
 
     """
 
 
-    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None,):
+    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None, histogram=None,):
         self.lowValue = lowValue
         self.highValue = highValue
         self.numNulls = numNulls
         self.numDVs = numDVs
         self.bitVectors = bitVectors
+        self.histogram = histogram
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -4927,6 +4932,11 @@ class DoubleColumnStatsData(object):
                     self.bitVectors = iprot.readBinary()
                 else:
                     iprot.skip(ftype)
+            elif fid == 6:
+                if ftype == TType.STRING:
+                    self.histogram = iprot.readBinary()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -4956,6 +4966,10 @@ class DoubleColumnStatsData(object):
         if self.bitVectors is not None:
             oprot.writeFieldBegin('bitVectors', TType.STRING, 5)
             oprot.writeBinary(self.bitVectors)
+            oprot.writeFieldEnd()
+        if self.histogram is not None:
+            oprot.writeFieldBegin('histogram', TType.STRING, 6)
+            oprot.writeBinary(self.histogram)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -4987,16 +5001,18 @@ class LongColumnStatsData(object):
      - numNulls
      - numDVs
      - bitVectors
+     - histogram
 
     """
 
 
-    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None,):
+    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None, histogram=None,):
         self.lowValue = lowValue
         self.highValue = highValue
         self.numNulls = numNulls
         self.numDVs = numDVs
         self.bitVectors = bitVectors
+        self.histogram = histogram
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -5032,6 +5048,11 @@ class LongColumnStatsData(object):
                     self.bitVectors = iprot.readBinary()
                 else:
                     iprot.skip(ftype)
+            elif fid == 6:
+                if ftype == TType.STRING:
+                    self.histogram = iprot.readBinary()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -5061,6 +5082,10 @@ class LongColumnStatsData(object):
         if self.bitVectors is not None:
             oprot.writeFieldBegin('bitVectors', TType.STRING, 5)
             oprot.writeBinary(self.bitVectors)
+            oprot.writeFieldEnd()
+        if self.histogram is not None:
+            oprot.writeFieldBegin('histogram', TType.STRING, 6)
+            oprot.writeBinary(self.histogram)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -5369,16 +5394,18 @@ class DecimalColumnStatsData(object):
      - numNulls
      - numDVs
      - bitVectors
+     - histogram
 
     """
 
 
-    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None,):
+    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None, histogram=None,):
         self.lowValue = lowValue
         self.highValue = highValue
         self.numNulls = numNulls
         self.numDVs = numDVs
         self.bitVectors = bitVectors
+        self.histogram = histogram
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -5416,6 +5443,11 @@ class DecimalColumnStatsData(object):
                     self.bitVectors = iprot.readBinary()
                 else:
                     iprot.skip(ftype)
+            elif fid == 6:
+                if ftype == TType.STRING:
+                    self.histogram = iprot.readBinary()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -5445,6 +5477,10 @@ class DecimalColumnStatsData(object):
         if self.bitVectors is not None:
             oprot.writeFieldBegin('bitVectors', TType.STRING, 5)
             oprot.writeBinary(self.bitVectors)
+            oprot.writeFieldEnd()
+        if self.histogram is not None:
+            oprot.writeFieldBegin('histogram', TType.STRING, 6)
+            oprot.writeBinary(self.histogram)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -5535,16 +5571,18 @@ class DateColumnStatsData(object):
      - numNulls
      - numDVs
      - bitVectors
+     - histogram
 
     """
 
 
-    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None,):
+    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None, histogram=None,):
         self.lowValue = lowValue
         self.highValue = highValue
         self.numNulls = numNulls
         self.numDVs = numDVs
         self.bitVectors = bitVectors
+        self.histogram = histogram
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -5582,6 +5620,11 @@ class DateColumnStatsData(object):
                     self.bitVectors = iprot.readBinary()
                 else:
                     iprot.skip(ftype)
+            elif fid == 6:
+                if ftype == TType.STRING:
+                    self.histogram = iprot.readBinary()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -5611,6 +5654,10 @@ class DateColumnStatsData(object):
         if self.bitVectors is not None:
             oprot.writeFieldBegin('bitVectors', TType.STRING, 5)
             oprot.writeBinary(self.bitVectors)
+            oprot.writeFieldEnd()
+        if self.histogram is not None:
+            oprot.writeFieldBegin('histogram', TType.STRING, 6)
+            oprot.writeBinary(self.histogram)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -5701,16 +5748,18 @@ class TimestampColumnStatsData(object):
      - numNulls
      - numDVs
      - bitVectors
+     - histogram
 
     """
 
 
-    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None,):
+    def __init__(self, lowValue=None, highValue=None, numNulls=None, numDVs=None, bitVectors=None, histogram=None,):
         self.lowValue = lowValue
         self.highValue = highValue
         self.numNulls = numNulls
         self.numDVs = numDVs
         self.bitVectors = bitVectors
+        self.histogram = histogram
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -5748,6 +5797,11 @@ class TimestampColumnStatsData(object):
                     self.bitVectors = iprot.readBinary()
                 else:
                     iprot.skip(ftype)
+            elif fid == 6:
+                if ftype == TType.STRING:
+                    self.histogram = iprot.readBinary()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -5777,6 +5831,10 @@ class TimestampColumnStatsData(object):
         if self.bitVectors is not None:
             oprot.writeFieldBegin('bitVectors', TType.STRING, 5)
             oprot.writeBinary(self.bitVectors)
+            oprot.writeFieldEnd()
+        if self.histogram is not None:
+            oprot.writeFieldBegin('histogram', TType.STRING, 6)
+            oprot.writeBinary(self.histogram)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -12462,14 +12520,16 @@ class AbortTxnRequest(object):
      - txnid
      - replPolicy
      - txn_type
+     - errorCode
 
     """
 
 
-    def __init__(self, txnid=None, replPolicy=None, txn_type=None,):
+    def __init__(self, txnid=None, replPolicy=None, txn_type=None, errorCode=None,):
         self.txnid = txnid
         self.replPolicy = replPolicy
         self.txn_type = txn_type
+        self.errorCode = errorCode
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -12495,6 +12555,11 @@ class AbortTxnRequest(object):
                     self.txn_type = iprot.readI32()
                 else:
                     iprot.skip(ftype)
+            elif fid == 4:
+                if ftype == TType.I64:
+                    self.errorCode = iprot.readI64()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -12516,6 +12581,10 @@ class AbortTxnRequest(object):
         if self.txn_type is not None:
             oprot.writeFieldBegin('txn_type', TType.I32, 3)
             oprot.writeI32(self.txn_type)
+            oprot.writeFieldEnd()
+        if self.errorCode is not None:
+            oprot.writeFieldBegin('errorCode', TType.I64, 4)
+            oprot.writeI64(self.errorCode)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -12541,12 +12610,14 @@ class AbortTxnsRequest(object):
     """
     Attributes:
      - txn_ids
+     - errorCode
 
     """
 
 
-    def __init__(self, txn_ids=None,):
+    def __init__(self, txn_ids=None, errorCode=None,):
         self.txn_ids = txn_ids
+        self.errorCode = errorCode
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -12567,6 +12638,11 @@ class AbortTxnsRequest(object):
                     iprot.readListEnd()
                 else:
                     iprot.skip(ftype)
+            elif fid == 2:
+                if ftype == TType.I64:
+                    self.errorCode = iprot.readI64()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -12583,6 +12659,10 @@ class AbortTxnsRequest(object):
             for iter659 in self.txn_ids:
                 oprot.writeI64(iter659)
             oprot.writeListEnd()
+            oprot.writeFieldEnd()
+        if self.errorCode is not None:
+            oprot.writeFieldBegin('errorCode', TType.I64, 2)
+            oprot.writeI64(self.errorCode)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -15263,11 +15343,12 @@ class CompactionRequest(object):
      - initiatorId
      - initiatorVersion
      - poolName
+     - numberOfBuckets
 
     """
 
 
-    def __init__(self, dbname=None, tablename=None, partitionname=None, type=None, runas=None, properties=None, initiatorId=None, initiatorVersion=None, poolName=None,):
+    def __init__(self, dbname=None, tablename=None, partitionname=None, type=None, runas=None, properties=None, initiatorId=None, initiatorVersion=None, poolName=None, numberOfBuckets=None,):
         self.dbname = dbname
         self.tablename = tablename
         self.partitionname = partitionname
@@ -15277,6 +15358,7 @@ class CompactionRequest(object):
         self.initiatorId = initiatorId
         self.initiatorVersion = initiatorVersion
         self.poolName = poolName
+        self.numberOfBuckets = numberOfBuckets
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -15338,6 +15420,11 @@ class CompactionRequest(object):
                     self.poolName = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
+            elif fid == 10:
+                if ftype == TType.I32:
+                    self.numberOfBuckets = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -15388,6 +15475,10 @@ class CompactionRequest(object):
             oprot.writeFieldBegin('poolName', TType.STRING, 9)
             oprot.writeString(self.poolName.encode('utf-8') if sys.version_info[0] == 2 else self.poolName)
             oprot.writeFieldEnd()
+        if self.numberOfBuckets is not None:
+            oprot.writeFieldBegin('numberOfBuckets', TType.I32, 10)
+            oprot.writeI32(self.numberOfBuckets)
+            oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
 
@@ -15432,11 +15523,12 @@ class CompactionInfoStruct(object):
      - enqueueTime
      - retryRetention
      - poolname
+     - numberOfBuckets
 
     """
 
 
-    def __init__(self, id=None, dbname=None, tablename=None, partitionname=None, type=None, runas=None, properties=None, toomanyaborts=None, state=None, workerId=None, start=None, highestWriteId=None, errorMessage=None, hasoldabort=None, enqueueTime=None, retryRetention=None, poolname=None,):
+    def __init__(self, id=None, dbname=None, tablename=None, partitionname=None, type=None, runas=None, properties=None, toomanyaborts=None, state=None, workerId=None, start=None, highestWriteId=None, errorMessage=None, hasoldabort=None, enqueueTime=None, retryRetention=None, poolname=None, numberOfBuckets=None,):
         self.id = id
         self.dbname = dbname
         self.tablename = tablename
@@ -15454,6 +15546,7 @@ class CompactionInfoStruct(object):
         self.enqueueTime = enqueueTime
         self.retryRetention = retryRetention
         self.poolname = poolname
+        self.numberOfBuckets = numberOfBuckets
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -15549,6 +15642,11 @@ class CompactionInfoStruct(object):
                     self.poolname = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
+            elif fid == 18:
+                if ftype == TType.I32:
+                    self.numberOfBuckets = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -15626,6 +15724,10 @@ class CompactionInfoStruct(object):
         if self.poolname is not None:
             oprot.writeFieldBegin('poolname', TType.STRING, 17)
             oprot.writeString(self.poolname.encode('utf-8') if sys.version_info[0] == 2 else self.poolname)
+            oprot.writeFieldEnd()
+        if self.numberOfBuckets is not None:
+            oprot.writeFieldBegin('numberOfBuckets', TType.I32, 18)
+            oprot.writeI32(self.numberOfBuckets)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -16101,23 +16203,27 @@ class ShowCompactRequest(object):
     Attributes:
      - id
      - poolName
-     - dbname
-     - tablename
-     - partitionname
+     - dbName
+     - tbName
+     - partName
      - type
      - state
+     - limit
+     - order
 
     """
 
 
-    def __init__(self, id=None, poolName=None, dbname=None, tablename=None, partitionname=None, type=None, state=None,):
+    def __init__(self, id=None, poolName=None, dbName=None, tbName=None, partName=None, type=None, state=None, limit=None, order=None,):
         self.id = id
         self.poolName = poolName
-        self.dbname = dbname
-        self.tablename = tablename
-        self.partitionname = partitionname
+        self.dbName = dbName
+        self.tbName = tbName
+        self.partName = partName
         self.type = type
         self.state = state
+        self.limit = limit
+        self.order = order
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -16140,17 +16246,17 @@ class ShowCompactRequest(object):
                     iprot.skip(ftype)
             elif fid == 3:
                 if ftype == TType.STRING:
-                    self.dbname = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                    self.dbName = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
             elif fid == 4:
                 if ftype == TType.STRING:
-                    self.tablename = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                    self.tbName = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
             elif fid == 5:
                 if ftype == TType.STRING:
-                    self.partitionname = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                    self.partName = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
             elif fid == 6:
@@ -16161,6 +16267,16 @@ class ShowCompactRequest(object):
             elif fid == 7:
                 if ftype == TType.STRING:
                     self.state = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 8:
+                if ftype == TType.I64:
+                    self.limit = iprot.readI64()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 9:
+                if ftype == TType.STRING:
+                    self.order = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
             else:
@@ -16181,17 +16297,17 @@ class ShowCompactRequest(object):
             oprot.writeFieldBegin('poolName', TType.STRING, 2)
             oprot.writeString(self.poolName.encode('utf-8') if sys.version_info[0] == 2 else self.poolName)
             oprot.writeFieldEnd()
-        if self.dbname is not None:
-            oprot.writeFieldBegin('dbname', TType.STRING, 3)
-            oprot.writeString(self.dbname.encode('utf-8') if sys.version_info[0] == 2 else self.dbname)
+        if self.dbName is not None:
+            oprot.writeFieldBegin('dbName', TType.STRING, 3)
+            oprot.writeString(self.dbName.encode('utf-8') if sys.version_info[0] == 2 else self.dbName)
             oprot.writeFieldEnd()
-        if self.tablename is not None:
-            oprot.writeFieldBegin('tablename', TType.STRING, 4)
-            oprot.writeString(self.tablename.encode('utf-8') if sys.version_info[0] == 2 else self.tablename)
+        if self.tbName is not None:
+            oprot.writeFieldBegin('tbName', TType.STRING, 4)
+            oprot.writeString(self.tbName.encode('utf-8') if sys.version_info[0] == 2 else self.tbName)
             oprot.writeFieldEnd()
-        if self.partitionname is not None:
-            oprot.writeFieldBegin('partitionname', TType.STRING, 5)
-            oprot.writeString(self.partitionname.encode('utf-8') if sys.version_info[0] == 2 else self.partitionname)
+        if self.partName is not None:
+            oprot.writeFieldBegin('partName', TType.STRING, 5)
+            oprot.writeString(self.partName.encode('utf-8') if sys.version_info[0] == 2 else self.partName)
             oprot.writeFieldEnd()
         if self.type is not None:
             oprot.writeFieldBegin('type', TType.I32, 6)
@@ -16200,6 +16316,14 @@ class ShowCompactRequest(object):
         if self.state is not None:
             oprot.writeFieldBegin('state', TType.STRING, 7)
             oprot.writeString(self.state.encode('utf-8') if sys.version_info[0] == 2 else self.state)
+            oprot.writeFieldEnd()
+        if self.limit is not None:
+            oprot.writeFieldBegin('limit', TType.I64, 8)
+            oprot.writeI64(self.limit)
+            oprot.writeFieldEnd()
+        if self.order is not None:
+            oprot.writeFieldBegin('order', TType.STRING, 9)
+            oprot.writeString(self.order.encode('utf-8') if sys.version_info[0] == 2 else self.order)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -26000,11 +26124,13 @@ class AlterTableRequest(object):
      - validWriteIdList
      - processorCapabilities
      - processorIdentifier
+     - expectedParameterKey
+     - expectedParameterValue
 
     """
 
 
-    def __init__(self, catName=None, dbName=None, tableName=None, table=None, environmentContext=None, writeId=-1, validWriteIdList=None, processorCapabilities=None, processorIdentifier=None,):
+    def __init__(self, catName=None, dbName=None, tableName=None, table=None, environmentContext=None, writeId=-1, validWriteIdList=None, processorCapabilities=None, processorIdentifier=None, expectedParameterKey=None, expectedParameterValue=None,):
         self.catName = catName
         self.dbName = dbName
         self.tableName = tableName
@@ -26014,6 +26140,8 @@ class AlterTableRequest(object):
         self.validWriteIdList = validWriteIdList
         self.processorCapabilities = processorCapabilities
         self.processorIdentifier = processorIdentifier
+        self.expectedParameterKey = expectedParameterKey
+        self.expectedParameterValue = expectedParameterValue
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -26076,6 +26204,16 @@ class AlterTableRequest(object):
                     self.processorIdentifier = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
+            elif fid == 10:
+                if ftype == TType.STRING:
+                    self.expectedParameterKey = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 11:
+                if ftype == TType.STRING:
+                    self.expectedParameterValue = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -26124,6 +26262,14 @@ class AlterTableRequest(object):
         if self.processorIdentifier is not None:
             oprot.writeFieldBegin('processorIdentifier', TType.STRING, 9)
             oprot.writeString(self.processorIdentifier.encode('utf-8') if sys.version_info[0] == 2 else self.processorIdentifier)
+            oprot.writeFieldEnd()
+        if self.expectedParameterKey is not None:
+            oprot.writeFieldBegin('expectedParameterKey', TType.STRING, 10)
+            oprot.writeString(self.expectedParameterKey.encode('utf-8') if sys.version_info[0] == 2 else self.expectedParameterKey)
+            oprot.writeFieldEnd()
+        if self.expectedParameterValue is not None:
+            oprot.writeFieldBegin('expectedParameterValue', TType.STRING, 11)
+            oprot.writeString(self.expectedParameterValue.encode('utf-8') if sys.version_info[0] == 2 else self.expectedParameterValue)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -30277,6 +30423,7 @@ DoubleColumnStatsData.thrift_spec = (
     (3, TType.I64, 'numNulls', None, None, ),  # 3
     (4, TType.I64, 'numDVs', None, None, ),  # 4
     (5, TType.STRING, 'bitVectors', 'BINARY', None, ),  # 5
+    (6, TType.STRING, 'histogram', 'BINARY', None, ),  # 6
 )
 all_structs.append(LongColumnStatsData)
 LongColumnStatsData.thrift_spec = (
@@ -30286,6 +30433,7 @@ LongColumnStatsData.thrift_spec = (
     (3, TType.I64, 'numNulls', None, None, ),  # 3
     (4, TType.I64, 'numDVs', None, None, ),  # 4
     (5, TType.STRING, 'bitVectors', 'BINARY', None, ),  # 5
+    (6, TType.STRING, 'histogram', 'BINARY', None, ),  # 6
 )
 all_structs.append(StringColumnStatsData)
 StringColumnStatsData.thrift_spec = (
@@ -30319,6 +30467,7 @@ DecimalColumnStatsData.thrift_spec = (
     (3, TType.I64, 'numNulls', None, None, ),  # 3
     (4, TType.I64, 'numDVs', None, None, ),  # 4
     (5, TType.STRING, 'bitVectors', 'BINARY', None, ),  # 5
+    (6, TType.STRING, 'histogram', 'BINARY', None, ),  # 6
 )
 all_structs.append(Date)
 Date.thrift_spec = (
@@ -30333,6 +30482,7 @@ DateColumnStatsData.thrift_spec = (
     (3, TType.I64, 'numNulls', None, None, ),  # 3
     (4, TType.I64, 'numDVs', None, None, ),  # 4
     (5, TType.STRING, 'bitVectors', 'BINARY', None, ),  # 5
+    (6, TType.STRING, 'histogram', 'BINARY', None, ),  # 6
 )
 all_structs.append(Timestamp)
 Timestamp.thrift_spec = (
@@ -30347,6 +30497,7 @@ TimestampColumnStatsData.thrift_spec = (
     (3, TType.I64, 'numNulls', None, None, ),  # 3
     (4, TType.I64, 'numDVs', None, None, ),  # 4
     (5, TType.STRING, 'bitVectors', 'BINARY', None, ),  # 5
+    (6, TType.STRING, 'histogram', 'BINARY', None, ),  # 6
 )
 all_structs.append(ColumnStatisticsData)
 ColumnStatisticsData.thrift_spec = (
@@ -30882,11 +31033,13 @@ AbortTxnRequest.thrift_spec = (
     (1, TType.I64, 'txnid', None, None, ),  # 1
     (2, TType.STRING, 'replPolicy', 'UTF8', None, ),  # 2
     (3, TType.I32, 'txn_type', None, None, ),  # 3
+    (4, TType.I64, 'errorCode', None, None, ),  # 4
 )
 all_structs.append(AbortTxnsRequest)
 AbortTxnsRequest.thrift_spec = (
     None,  # 0
     (1, TType.LIST, 'txn_ids', (TType.I64, None, False), None, ),  # 1
+    (2, TType.I64, 'errorCode', None, None, ),  # 2
 )
 all_structs.append(CommitTxnKeyValue)
 CommitTxnKeyValue.thrift_spec = (
@@ -31115,6 +31268,7 @@ CompactionRequest.thrift_spec = (
     (7, TType.STRING, 'initiatorId', 'UTF8', None, ),  # 7
     (8, TType.STRING, 'initiatorVersion', 'UTF8', None, ),  # 8
     (9, TType.STRING, 'poolName', 'UTF8', None, ),  # 9
+    (10, TType.I32, 'numberOfBuckets', None, None, ),  # 10
 )
 all_structs.append(CompactionInfoStruct)
 CompactionInfoStruct.thrift_spec = (
@@ -31136,6 +31290,7 @@ CompactionInfoStruct.thrift_spec = (
     (15, TType.I64, 'enqueueTime', None, None, ),  # 15
     (16, TType.I64, 'retryRetention', None, None, ),  # 16
     (17, TType.STRING, 'poolname', 'UTF8', None, ),  # 17
+    (18, TType.I32, 'numberOfBuckets', None, None, ),  # 18
 )
 all_structs.append(OptionalCompactionInfoStruct)
 OptionalCompactionInfoStruct.thrift_spec = (
@@ -31179,11 +31334,13 @@ ShowCompactRequest.thrift_spec = (
     None,  # 0
     (1, TType.I64, 'id', None, None, ),  # 1
     (2, TType.STRING, 'poolName', 'UTF8', None, ),  # 2
-    (3, TType.STRING, 'dbname', 'UTF8', None, ),  # 3
-    (4, TType.STRING, 'tablename', 'UTF8', None, ),  # 4
-    (5, TType.STRING, 'partitionname', 'UTF8', None, ),  # 5
+    (3, TType.STRING, 'dbName', 'UTF8', None, ),  # 3
+    (4, TType.STRING, 'tbName', 'UTF8', None, ),  # 4
+    (5, TType.STRING, 'partName', 'UTF8', None, ),  # 5
     (6, TType.I32, 'type', None, None, ),  # 6
     (7, TType.STRING, 'state', 'UTF8', None, ),  # 7
+    (8, TType.I64, 'limit', None, None, ),  # 8
+    (9, TType.STRING, 'order', 'UTF8', None, ),  # 9
 )
 all_structs.append(ShowCompactResponseElement)
 ShowCompactResponseElement.thrift_spec = (
@@ -31996,6 +32153,8 @@ AlterTableRequest.thrift_spec = (
     (7, TType.STRING, 'validWriteIdList', 'UTF8', None, ),  # 7
     (8, TType.LIST, 'processorCapabilities', (TType.STRING, 'UTF8', False), None, ),  # 8
     (9, TType.STRING, 'processorIdentifier', 'UTF8', None, ),  # 9
+    (10, TType.STRING, 'expectedParameterKey', 'UTF8', None, ),  # 10
+    (11, TType.STRING, 'expectedParameterValue', 'UTF8', None, ),  # 11
 )
 all_structs.append(AlterTableResponse)
 AlterTableResponse.thrift_spec = (

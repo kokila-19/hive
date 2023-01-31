@@ -151,10 +151,8 @@ public class VectorizedParquetRecordReader extends ParquetRecordReaderBase
     this(oldInputSplit, conf, null, null, null);
   }
 
-  public VectorizedParquetRecordReader(
-      InputSplit oldInputSplit, JobConf conf,
-      FileMetadataCache metadataCache, DataCache dataCache, Configuration cacheConf)
-      throws IOException {
+  public VectorizedParquetRecordReader(InputSplit oldInputSplit, JobConf conf, FileMetadataCache metadataCache,
+      DataCache dataCache, Configuration cacheConf, ParquetMetadata parquetMetadata) throws IOException {
     super(conf, oldInputSplit);
     try {
       this.metadataCache = metadataCache;
@@ -177,7 +175,7 @@ public class VectorizedParquetRecordReader extends ParquetRecordReaderBase
         }
       }
 
-      setupMetadataAndParquetSplit(conf);
+      setupMetadataAndParquetSplit(conf, parquetMetadata);
 
       colsToInclude = ColumnProjectionUtils.getReadColumnIDs(conf);
       //initialize the rowbatchContext
@@ -192,6 +190,11 @@ public class VectorizedParquetRecordReader extends ParquetRecordReaderBase
       LOG.error("Failed to create the vectorized reader due to exception " + e);
       throw new RuntimeException(e);
     }
+  }
+
+  public VectorizedParquetRecordReader(InputSplit oldInputSplit, JobConf conf, FileMetadataCache metadataCache,
+      DataCache dataCache, Configuration cacheConf) throws IOException {
+    this(oldInputSplit, conf, metadataCache, dataCache, cacheConf, null);
   }
 
   private void initPartitionValues(FileSplit fileSplit, JobConf conf) throws IOException {
@@ -233,11 +236,11 @@ public class VectorizedParquetRecordReader extends ParquetRecordReaderBase
     long allRowsInFile = 0;
     int blockIndex = 0;
     for (BlockMetaData block : parquetMetadata.getBlocks()) {
-      rowGroupNumToRowPos.put(blockIndex++, allRowsInFile);
-      allRowsInFile += block.getRowCount();
       if (offsets.contains(block.getStartingPos())) {
+        rowGroupNumToRowPos.put(blockIndex++, allRowsInFile);
         blocks.add(block);
       }
+      allRowsInFile += block.getRowCount();
     }
     // verify we found them all
     if (blocks.size() != rowGroupOffsets.length) {

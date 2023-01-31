@@ -37,6 +37,7 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Context.Operation;
 import org.apache.hadoop.hive.ql.ddl.table.AbstractAlterTableDesc;
 import org.apache.hadoop.hive.ql.ddl.table.AlterTableType;
+import org.apache.hadoop.hive.ql.ddl.table.create.like.CreateTableLikeDesc;
 import org.apache.hadoop.hive.ql.hooks.WriteEntity;
 import org.apache.hadoop.hive.ql.parse.AlterTableExecuteSpec;
 import org.apache.hadoop.hive.ql.parse.TransformSpec;
@@ -54,6 +55,7 @@ import org.apache.hadoop.mapred.InputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.OutputFormat;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -244,17 +246,15 @@ public interface HiveStorageHandler extends Configurable {
   }
 
   /**
-   * Check if CTAS operations should behave in a direct-insert manner (i.e. no move task).
-   *
-   * If true, the compiler will not include the table creation task and move task into the execution plan.
-   * Instead, it's the responsibility of storage handler/serde to create the table during the compilation phase.
+   * Check if CTAS and CMV operations should behave in a direct-insert manner (i.e. no move task).
+   * <p>
    * Please note that the atomicity of the operation will suffer in this case, i.e. the created table might become
-   * exposed, depending on the implementation, before the CTAS operations finishes.
+   * exposed, depending on the implementation, before the CTAS or CMV operations finishes.
    * Rollback (e.g. dropping the table) is also the responsibility of the storage handler in case of failures.
    *
-   * @return whether direct insert CTAS is required
+   * @return whether direct insert CTAS or CMV is required
    */
-  default boolean directInsertCTAS() {
+  default boolean directInsert() {
     return false;
   }
 
@@ -270,6 +270,25 @@ public interface HiveStorageHandler extends Configurable {
    */
   default boolean alwaysUnpartitioned() {
     return false;
+  }
+
+  /**
+   * Retains storage handler specific properties during CTLT.
+   * @param tbl        the table
+   * @param desc       the table descriptor
+   * @param origParams the original table properties
+   */
+  default void setTableParametersForCTLT(org.apache.hadoop.hive.ql.metadata.Table tbl, CreateTableLikeDesc desc,
+      Map<String, String> origParams) {
+  }
+
+  /**
+   * Extract the native properties of the table which aren't stored in the HMS
+   * @param table the table
+   * @return map with native table level properties
+   */
+  default Map<String, String> getNativeProperties(org.apache.hadoop.hive.ql.metadata.Table table) {
+    return new HashMap<>();
   }
 
   enum AcidSupportType {
@@ -293,7 +312,8 @@ public interface HiveStorageHandler extends Configurable {
    *
    * @return the table's ACID support type
    */
-  default AcidSupportType supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table table) {
+  default AcidSupportType supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table table,
+      boolean isWriteOperation) {
     return AcidSupportType.NONE;
   }
 
@@ -302,7 +322,7 @@ public interface HiveStorageHandler extends Configurable {
    * for tables that support ACID operations.
    *
    * Should only return a non-empty list if
-   * {@link HiveStorageHandler#supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table)} ()} returns something
+   * {@link HiveStorageHandler#supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table, boolean)} ()} returns something
    * other NONE.
    *
    * @return the list of ACID virtual columns
@@ -322,7 +342,7 @@ public interface HiveStorageHandler extends Configurable {
    * This method specifies which columns should be injected into the &lt;selectCols&gt; part of the rewritten query.
    *
    * Should only return a non-empty list if
-   * {@link HiveStorageHandler#supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table)} returns something
+   * {@link HiveStorageHandler#supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table, boolean)} returns something
    * other NONE.
    *
    * @param table the table which is being deleted/updated/merged into
@@ -341,7 +361,7 @@ public interface HiveStorageHandler extends Configurable {
    * This method specifies which columns should be injected into the &lt;sortCols&gt; part of the rewritten query.
    *
    * Should only return a non-empty list if
-   * {@link HiveStorageHandler#supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table)} returns something
+   * {@link HiveStorageHandler#supportsAcidOperations(org.apache.hadoop.hive.ql.metadata.Table, boolean)} returns something
    * other NONE.
    *
    * @param table the table which is being deleted/updated/merged into

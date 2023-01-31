@@ -26,6 +26,7 @@ import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.ShowCompactRequest;
 import org.apache.hadoop.hive.metastore.api.ShowCompactResponseElement;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
+import org.apache.hadoop.hive.metastore.txn.TxnStore;
 import org.apache.hadoop.hive.metastore.txn.TxnUtils;
 import org.apache.hadoop.hive.metastore.utils.TestTxnDbUtil;
 import org.apache.hadoop.hive.ql.DriverFactory;
@@ -105,6 +106,7 @@ public abstract class CompactorOnTezTest {
     hiveConf.setVar(HiveConf.ConfVars.HIVEFETCHTASKCONVERSION, "none");
     MetastoreConf.setTimeVar(hiveConf, MetastoreConf.ConfVars.TXN_OPENTXN_TIMEOUT, 2, TimeUnit.SECONDS);
     MetastoreConf.setBoolVar(hiveConf, MetastoreConf.ConfVars.COMPACTOR_INITIATOR_ON, true);
+    MetastoreConf.setBoolVar(hiveConf, MetastoreConf.ConfVars.COMPACTOR_CLEANER_ON, true);
 
     TestTxnDbUtil.setConfValues(hiveConf);
     TestTxnDbUtil.cleanDb(hiveConf);
@@ -156,36 +158,53 @@ public abstract class CompactorOnTezTest {
   }
 
   /**
-   * Verify that the expected number of transactions have run, and their state is "succeeded".
+   * Verify that the expected number of compactions have run, and their state matches the given state.
+   *
+   * @param expectedNumberOfCompactions number of compactions already run
+   * @param expectedState The expected state of all the compactions
+   * @throws MetaException
+   */
+  protected List<ShowCompactResponseElement> verifyCompaction(int expectedNumberOfCompactions, String expectedState) throws MetaException {
+    List<ShowCompactResponseElement> compacts =
+        TxnUtils.getTxnStore(conf).showCompact(new ShowCompactRequest()).getCompacts();
+    Assert.assertEquals("Compaction queue must contain " + expectedNumberOfCompactions + " element(s)",
+        expectedNumberOfCompactions, compacts.size());
+    compacts.forEach(
+        c -> Assert.assertEquals("Compaction state is not " + expectedState, expectedState, c.getState()));
+    return compacts;
+  }
+
+  /**
+   * Verify that the expected number of compactions have run, and their state is "succeeded".
    *
    * @param expectedSuccessfulCompactions number of compactions already run
    * @throws MetaException
    */
   protected void verifySuccessfulCompaction(int expectedSuccessfulCompactions) throws MetaException {
-    List<ShowCompactResponseElement> compacts =
-        TxnUtils.getTxnStore(conf).showCompact(new ShowCompactRequest()).getCompacts();
-    Assert.assertEquals("Completed compaction queue must contain " + expectedSuccessfulCompactions + " element(s)",
-        expectedSuccessfulCompactions, compacts.size());
-    compacts.forEach(
-        c -> Assert.assertEquals("Compaction state is not succeeded", "succeeded", c.getState()));
+    verifyCompaction(expectedSuccessfulCompactions, TxnStore.SUCCEEDED_RESPONSE);
   }
 
   protected HiveHookEvents.HiveHookEventProto getRelatedTezEvent(String dbTableName) throws Exception {
-    ProtoMessageReader<HiveHookEvents.HiveHookEventProto> reader = TestHiveProtoLoggingHook.getTestReader(conf, tmpFolder);
-    HiveHookEvents.HiveHookEventProto event = reader.readEvent();
-    boolean getRelatedEvent = false;
-    while (!getRelatedEvent) {
-      while (ExecutionMode.TEZ != ExecutionMode.valueOf(event.getExecutionMode())) {
-        event = reader.readEvent();
+    List<ProtoMessageReader<HiveHookEvents.HiveHookEventProto>> readers = TestHiveProtoLoggingHook.getTestReader(conf, tmpFolder);
+    for (ProtoMessageReader<HiveHookEvents.HiveHookEventProto> reader : readers) {
+      HiveHookEvents.HiveHookEventProto event = reader.readEvent();
+      boolean getRelatedEvent = false;
+      while (!getRelatedEvent) {
+        while (event != null && ExecutionMode.TEZ != ExecutionMode.valueOf(event.getExecutionMode())) {
+          event = reader.readEvent();
+        }
+        // Tables read is the table picked for compaction.
+        if (event.getTablesReadCount() > 0 && dbTableName.equalsIgnoreCase(event.getTablesRead(0))) {
+          getRelatedEvent = true;
+        } else {
+          event = reader.readEvent();
+        }
       }
-      // Tables read is the table picked for compaction.
-      if (event.getTablesReadCount() > 0 && dbTableName.equalsIgnoreCase(event.getTablesRead(0))) {
-        getRelatedEvent = true;
-      } else {
-        event = reader.readEvent();
+      if (getRelatedEvent) {
+        return event;
       }
     }
-    return event;
+    return null;
   }
 
   protected class TestDataProvider {
@@ -278,7 +297,7 @@ public abstract class CompactorOnTezTest {
     /**
      * 3 txns.
      */
-    protected void insertMmTestDataPartitioned(String tblName) throws Exception {
+    protected void insertOnlyTestDataPartitioned(String tblName) throws Exception {
       executeStatementOnDriver("insert into " + tblName
           + " values('1',2, 'today'),('1',3, 'today'),('1',4, 'yesterday'),('2',2, 'tomorrow'),"
           + "('2',3, 'yesterday'),('2',4, 'today')", driver);
@@ -289,10 +308,27 @@ public abstract class CompactorOnTezTest {
           + "('5',4, 'today'),('6',2, 'today'),('6',3, 'today'),('6',4, 'today')", driver);
     }
 
+    protected void insertTestData(String tblName, boolean isPartitioned) throws Exception {
+      if (isPartitioned) {
+        insertTestDataPartitioned(tblName);
+      } else {
+        insertTestData(tblName);
+      }
+    }
+
+
+    protected void insertOnlyTestData(String tblName, boolean isPartitioned) throws Exception {
+      if (isPartitioned) {
+        insertOnlyTestDataPartitioned(tblName);
+      } else {
+        insertOnlyTestData(tblName);
+      }
+    }
+
     /**
      * 5 txns.
      */
-    void insertTestData(String tblName) throws Exception {
+    private void insertTestData(String tblName) throws Exception {
       insertTestData(null, tblName);
     }
 
@@ -387,14 +423,14 @@ public abstract class CompactorOnTezTest {
     /**
      * 5 txns.
      */
-    void insertMmTestData(String tblName) throws Exception {
-      insertMmTestData(null, tblName);
+    void insertOnlyTestData(String tblName) throws Exception {
+      insertOnlyTestData(null, tblName);
     }
 
     /**
      * 3 txns.
      */
-    void insertMmTestData(String dbName, String tblName) throws Exception {
+    void insertOnlyTestData(String dbName, String tblName) throws Exception {
       if (dbName != null) {
         tblName = dbName + "." + tblName;
       }
@@ -421,7 +457,7 @@ public abstract class CompactorOnTezTest {
     /**
      * i txns.
      */
-    protected void insertMmTestData(String tblName, int iterations) throws Exception {
+    protected void insertOnlyTestData(String tblName, int iterations) throws Exception {
       for (int i = 0; i < iterations; i++) {
         executeStatementOnDriver("insert into " + tblName + " values('" + i + "'," + i + ")", driver);
       }
