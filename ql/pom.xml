@@ -1013,7 +1013,7 @@
             <TZ>US/Pacific</TZ>
             <LANG>en_US.UTF-8</LANG>
             <HADOOP_CLASSPATH>${test.conf.dir}:${basedir}/${hive.path.to.root}/conf</HADOOP_CLASSPATH>
-            <HIVE_HADOOP_TEST_CLASSPATH>${project.build.directory}/deplibs/*</HIVE_HADOOP_TEST_CLASSPATH>
+            <HIVE_HADOOP_TEST_CLASSPATH>${test.hive.hadoop.classpath}</HIVE_HADOOP_TEST_CLASSPATH>
             <PATH>${env.PATH}${test.extra.path}</PATH>
           </environmentVariables>
         </configuration>
