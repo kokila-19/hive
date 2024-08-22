@@ -206,7 +206,8 @@
     <super-csv.version>2.2.0</super-csv.version>
     <tempus-fugit.version>1.1</tempus-fugit.version>
     <snappy.version>1.1.10.4</snappy.version>
-    <wadl-resourcedoc-doclet.version>1.4</wadl-resourcedoc-doclet.version>
+    <jersey-wadl-doclet.version>4.0.0-M1</jersey-wadl-doclet.version>
+    <jaxb-runtime.version>4.0.0-M1</jaxb-runtime.version>
     <velocity.version>2.3</velocity.version>
     <xerces.version>2.12.2</xerces.version>
     <xmlsec.version>2.3.4</xmlsec.version>
@@ -365,9 +366,14 @@
         <version>${jersey.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.sun.jersey.contribs</groupId>
-        <artifactId>wadl-resourcedoc-doclet</artifactId>
-        <version>${wadl-resourcedoc-doclet.version}</version>
+        <groupId>org.glassfish.jersey.ext</groupId>
+        <artifactId>jersey-wadl-doclet</artifactId>
+        <version>${jersey-wadl-doclet.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish.jaxb</groupId>
+        <artifactId>jaxb-runtime</artifactId>
+        <version>${jaxb-runtime.version}</version>
       </dependency>
       <dependency>
         <groupId>com.sun.jersey</groupId>
