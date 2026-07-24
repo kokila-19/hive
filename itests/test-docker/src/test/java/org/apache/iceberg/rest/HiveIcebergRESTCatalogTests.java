@@ -22,8 +22,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.util.Map;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.iceberg.HasTableOperations;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.CatalogTests;
@@ -85,6 +83,12 @@ class HiveIcebergRESTCatalogTests extends CatalogTests<RESTCatalog> {
     return true;
   }
 
+  /**
+   * Checks that loading a table fails clearly when its metadata file is missing.
+   *
+   * <p>The base Iceberg test moves the metadata file with {@code Files.move()} which only works
+   * on a local disk. Docker tests store data on S3, so this override deletes the file.
+   */
   @Test
   @Override
   public void testLoadTableWithMissingMetadataFile(@TempDir java.nio.file.Path tempDir)
@@ -101,17 +105,10 @@ class HiveIcebergRESTCatalogTests extends CatalogTests<RESTCatalog> {
     Table table = catalog.loadTable(TBL);
     String metadataFileLocation =
         ((HasTableOperations) table).operations().current().metadataFileLocation();
-    Path metadataPath = new Path(metadataFileLocation);
-    Path backupPath = metadataPath.suffix(".bak");
-    FileSystem fs = metadataPath.getFileSystem(client.getHadoopConf());
+    table.io().deleteFile(metadataFileLocation);
 
-    try {
-      assertThat(fs.rename(metadataPath, backupPath)).isTrue();
-      assertThatThrownBy(() -> catalog.loadTable(TBL))
-          .isInstanceOf(NotFoundException.class)
-          .hasMessageContaining("Failed to open input stream for file: " + metadataFileLocation);
-    } finally {
-      fs.rename(backupPath, metadataPath);
-    }
+    assertThatThrownBy(() -> catalog.loadTable(TBL))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("Failed to open input stream for file: " + metadataFileLocation);
   }
 }
